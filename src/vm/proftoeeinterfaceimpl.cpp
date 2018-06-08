@@ -127,6 +127,7 @@
 #include "safemath.h"
 #include "threadsuspend.h"
 #include "inlinetracking.h"
+#include "../binder/inc/applicationcontext.hpp"
 
 #ifdef PROFILING_SUPPORTED
 #include "profilinghelper.h"
@@ -592,6 +593,10 @@ COM_METHOD ProfToEEInterfaceImpl::QueryInterface(REFIID id, void ** pInterface)
     else if (id == IID_ICorProfilerInfo9)
     {
         *pInterface = static_cast<ICorProfilerInfo9 *>(this);
+    }
+    else if (id == IID_ICorProfilerInfo10)
+    {
+        *pInterface = static_cast<ICorProfilerInfo10 *>(this);
     }
     else if (id == IID_IUnknown)
     {
@@ -6828,6 +6833,60 @@ HRESULT ProfToEEInterfaceImpl::GetCodeInfo4(UINT_PTR pNativeCodeStartAddress,
                                     cCodeInfos,
                                     pcCodeInfos,
                                     codeInfos);
+}
+
+/*
+ * AddAssemblyPath
+ * 
+ * Adds a path to the list of assemblies that the runtime probes to resolve assembly references.
+ * 
+ * Parameters:
+ *      appDomainId             - the App Domain container id
+ *      pAssemblyPath           - the path to add
+ *
+ * Returns:
+ *   S_OK if successful
+ *
+*/
+HRESULT ProfToEEInterfaceImpl::AddAssemblyPath(AppDomainID appDomainId, 
+                                               const WCHAR* pAssemblyPath)
+{
+    CONTRACTL
+    {
+        // Yay!
+        NOTHROW;
+
+        // Yay!
+        GC_NOTRIGGER;
+
+        // Yay!
+        MODE_ANY;
+
+        // Yay!
+        CAN_TAKE_LOCK;
+
+        SO_NOT_MAINLINE;
+    }
+    CONTRACTL_END;
+
+    PROFILER_TO_CLR_ENTRYPOINT_SYNC((LF_CORPROF,
+        LL_INFO1000,
+        "**PROF: AddAssemblyPath \n"));
+
+    BaseDomain* pDomain = (BaseDomain *)appDomainId;
+    BINDER_SPACE::SimpleNameToFileNameMap *tpaMap = pDomain->GetTPABinderContext()->GetAppContext()->GetTpaList();
+    
+    StackSString assemblyPath;
+    const size_t dirLength = wcslen(pAssemblyPath);
+    assemblyPath.Set(pAssemblyPath, (DWORD)dirLength);
+
+    BINDER_SPACE::SimpleNameToFileNameMapEntry mapEntry;
+    mapEntry.m_wszSimpleName = assemblyPath;
+    mapEntry.m_wszILFileName = assemblyPath;
+    mapEntry.m_wszNIFileName = nullptr;
+    tpaMap->Add(mapEntry);
+
+    return S_OK;
 }
 
 /*
